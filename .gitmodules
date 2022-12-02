@@ -4,3 +4,12 @@
 [submodule "cmake"]
 	path = cmake
 	url = https://github.com/jrl-umi3218/jrl-cmakemodules
+[submodule "talos"]
+	path = talos
+	url = https://github.com/agimus/agimus-demos-talos
+[submodule "tiago"]
+	path = tiago
+	url = https://github.com/agimus/agimus-demos-tiago
+[submodule "ur10"]
+	path = ur10
+	url = https://github.com/agimus/agimus-demos-ur10

@@ -56,9 +56,9 @@ MACRO(INSTALL_DEMO_LAUNCH_FILES DEMO)
   ENDFOREACH ()
 ENDMACRO()
 
-OPTION(USE_TALOS "Install files for talos robot" ON)
-OPTION(USE_TIAGO "Install files for tiago robot" ON)
-OPTION(USE_UR10 "Install files for UR10 robot" ON)
+OPTION(USE_TALOS "Install files for talos robot" OFF)
+OPTION(USE_TIAGO "Install files for tiago robot" OFF)
+OPTION(USE_UR10 "Install files for UR10 robot" OFF)
 
 IF(USE_TALOS)
   ADD_SUBDIRECTORY(talos)

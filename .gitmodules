@@ -13,3 +13,6 @@
 [submodule "ur10"]
 	path = ur10
 	url = https://github.com/agimus/agimus-demos-ur10
+[submodule "franka"]
+	path = franka
+	url = https://github.com/agimus/agimus-demos-franka

@@ -1,1 +1,2 @@
 from .tooltip_calibration import TooltipCalibration
+from .hand_eye_calibration import Calibration as HandEyeCalibration

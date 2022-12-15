@@ -35,31 +35,34 @@ catkin_package(
 )
 find_package(Eigen3)
 
-MACRO(INSTALL_DEMO_LAUNCH_FILES DEMO)
+MACRO(INSTALL_DEMO_LAUNCH_FILES ROBOT DEMO)
   set(options)
   set(oneValueArgs)
   set(multiValueArgs LAUNCHFILES SCRIPTS)
   cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-  FILE(RELATIVE_PATH robot ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
-  MESSAGE(STATUS "Add demonstration ${robot}/${DEMO}")
+  MESSAGE(STATUS "Add demonstration ${ROBOT}/${DEMO}")
   FOREACH (launch_file ${ARG_LAUNCHFILES})
     install(FILES
-      ${DEMO}/${launch_file}
+      ${PROJECT_SOURCE_DIR}/${ROBOT}/${DEMO}/${launch_file}
       DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
-      RENAME ${robot}_${DEMO}_${launch_file}
+      RENAME ${ROBOT}_${DEMO}_${launch_file}
     )
   ENDFOREACH ()
   FOREACH (script_file ${ARG_SCRIPTS})
     install(PROGRAMS "${DEMO}/${script_file}"
       DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-      RENAME ${robot}_${DEMO}_${script_file})
+      RENAME ${ROBOT}_${DEMO}_${script_file})
   ENDFOREACH ()
 ENDMACRO()
 
-OPTION(USE_TALOS "Install files for talos robot" ON)
-OPTION(USE_TIAGO "Install files for tiago robot" ON)
-OPTION(USE_UR10 "Install files for UR10 robot" ON)
+OPTION(USE_FRANKA "Install files for franka robot" OFF)
+OPTION(USE_TALOS "Install files for talos robot" OFF)
+OPTION(USE_TIAGO "Install files for tiago robot" OFF)
+OPTION(USE_UR10 "Install files for UR10 robot" OFF)
 
+IF(USE_FRANKA)
+  ADD_SUBDIRECTORY(franka)
+ENDIF()
 IF(USE_TALOS)
   ADD_SUBDIRECTORY(talos)
 ENDIF()

@@ -59,6 +59,7 @@ class Calibration(object):
     Various methods to perform hand-eye calibration
     """
     transition = "Loop | f"
+    nbConnect = 100
 
     def __init__(self, ps, graph):
         self.ps = ps
@@ -162,7 +163,7 @@ class Calibration(object):
             self.ps.addConfigToRoadmap(q)
         for i, q in enumerate(configs):
             self.ps.addConfigToRoadmap(q)
-            closest = getClosest(dist,i,20)
+            closest = getClosest(dist,i,self.nbConnect)
             for j in closest:
                 if dist[i,j] != 0 and j>i:
                     qi=configs[i]

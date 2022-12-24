@@ -29,7 +29,7 @@ def run():
         ext_msg.translation = trans
 
         rot = R.from_quat(rot)
-        ext_msg.rotation = list(rot.as_dcm().flatten())
+        ext_msg.rotation = list(rot.as_matrix().flatten())
 
         publisher.publish(ext_msg)
         counter += 1

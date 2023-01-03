@@ -77,7 +77,7 @@ ENDIF()
 add_subdirectory(src)
 
 # Install other files with the same hierarchy as here.
-install(DIRECTORY talos tiago urdf srdf meshes worlds
+install(DIRECTORY urdf srdf meshes worlds
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   FILES_MATCHING
   PATTERN "*"

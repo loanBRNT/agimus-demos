@@ -29,7 +29,10 @@ def run():
         ext_msg.translation = trans
 
         rot = R.from_quat(rot)
-        ext_msg.rotation = list(rot.as_matrix().flatten())
+        try:
+            ext_msg.rotation = list(rot.as_matrix().flatten())
+        except AttributeError as exc:
+            ext_msg.rotation = list(rot.as_dcm().flatten())
 
         publisher.publish(ext_msg)
         counter += 1

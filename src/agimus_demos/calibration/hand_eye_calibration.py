@@ -36,6 +36,8 @@
 
 from csv import reader, writer
 import argparse, numpy as np
+from hpp.corbaserver import wrap_delete
+from .. import InStatePlanner
 
 # get indices of closest configs to config [i]
 def getClosest(dist,i,n):
@@ -61,9 +63,24 @@ class Calibration(object):
     transition = "Loop | f"
     nbConnect = 100
 
+    def wd(self, o):
+        return wrap_delete(o, self.ps.client.basic)
+
     def __init__(self, ps, graph):
         self.ps = ps
         self.graph = graph
+        self.euclideanDistance = np.zeros(0).reshape(0,0)
+        self.setTransition(self.transition)
+
+    # Set transition
+    #  \param transition name of the transition
+    # Recover transition path validation object to validate configurations
+    def setTransition(self, transition):
+        self.transition = transition
+        cproblem = self.wd(self.ps.client.basic.problem.getProblem())
+        cgraph = cproblem.getConstraintGraph()
+        cedge = self.wd(cgraph.get(self.graph.edges[transition]))
+        self.pathValidation = self.wd(cedge.getPathValidation())
 
     # Write configurations in a file in CSV format
     def writeConfigsInFile(self, filename, configs):
@@ -98,21 +115,26 @@ class Calibration(object):
             res, q1, err = self.graph.generateTargetConfig\
                (self.transition, q0, q)
             if not res: continue
-            res, msg = robot.isConfigValid(q1)
+            res, msg = self.pathValidation.validateConfiguration(q1)
             if res:
                 configs.append(q1)
                 i += 1
         return configs
 
-    def buildEuclideanDistanceMatrix (self, configs):
+    def buildEuclideanDistanceMatrix (self, configs, start_at=0):
+        assert(self.euclideanDistance.shape[0] >= start_at and \
+               self.euclideanDistance.shape[1] >= start_at)
+        # Build matrix of distances between configurations
         N = len (configs)
-        # Build matrix of distances between box poses
-        dist = np.matrix (np.zeros (N*N).reshape (N,N))
+        # Copy previous matrix in bigger matrix
+        dist = np.array (np.zeros (N*N).reshape (N,N))
+        dist[0:start_at,0:start_at] = self.euclideanDistance[0:start_at,
+                                                             0:start_at]
         for i in range (N):
-            for j in range (i+1,N):
+            for j in range (max(i+1, start_at),N):
                 dist [i,j] = self.distance (configs [i], configs [j])
                 dist [j,i] = dist [i,j]
-        return dist
+        self.euclideanDistance = dist
 
     def buildRoadmapDistanceMatrix(self, configs):
         N = len(configs)
@@ -155,17 +177,19 @@ class Calibration(object):
             orderedConfigs.append(configs [i])
         return orderedConfigs
 
-    def buildRoadmap(self, configs):
-        self.ps.clearRoadmap()
-        if len(configs)==0: return
-        dist = self.buildEuclideanDistanceMatrix(configs)
-        for q in configs:
+    # Build a roadmap with the input configurations
+    #
+    #   The configurations are inserted as nodes
+    #   Edges are built between the closest configurations
+    def buildRoadmap(self, configs, start_at = 0):
+        if len(configs) - start_at ==0: return
+        self.buildEuclideanDistanceMatrix(configs, start_at)
+        for q in configs[start_at:]:
             self.ps.addConfigToRoadmap(q)
-        for i, q in enumerate(configs):
-            self.ps.addConfigToRoadmap(q)
-            closest = getClosest(dist,i,self.nbConnect)
+        for i, q in enumerate(configs[start_at:]):
+            closest = getClosest(self.euclideanDistance, i, self.nbConnect)
             for j in closest:
-                if dist[i,j] != 0 and j>i:
+                if self.euclideanDistance[i,j] != 0 and j<i:
                     qi=configs[i]
                     qj=configs[j]
                     res, pid, msg = self.ps.directPath(qi,qj,True)

@@ -16,3 +16,6 @@
 [submodule "franka"]
 	path = franka
 	url = https://github.com/agimus/agimus-demos-franka
+[submodule "ur5"]
+	path = ur5
+	url = https://github.com/agimus/agimus-demos-ur5

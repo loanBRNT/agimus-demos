@@ -34,9 +34,16 @@
 #
 #  Then, it computes a path going through all these configurations.
 
+import os
 from csv import reader, writer
+import yaml
 import argparse, numpy as np
+from hpp import Transform
 from hpp.corbaserver import wrap_delete
+from hpp.corbaserver.manipulation import Constraints, SecurityMargins
+import pinocchio
+from pinocchio import SE3, exp3, RobotWrapper
+from ..tools_hpp import RosInterface
 from .. import InStatePlanner
 
 # get indices of closest configs to config [i]
@@ -62,25 +69,183 @@ class Calibration(object):
     """
     transition = "Loop | f"
     nbConnect = 100
+    camera_frame = None
+    chessboard_name = "part"
+    chessboard_frame = 'part/base_link'
+    chessboard_joint = 'part/root_joint'
+    # Position of the chessboard center in the part frame
+    chessboard_center = (0,0,0)
+    # For security margins
+    robot_name = None
+    security_distance_robot_robot = 0
+    security_distance_robot_chessboard = 0.015
+    security_distance_chessboard_universe = float("-inf")
+    default_security_distance = .01
 
     def wd(self, o):
         return wrap_delete(o, self.ps.client.basic)
 
-    def __init__(self, ps, graph):
+    def __init__(self, ps, graph, factory):
         self.ps = ps
         self.graph = graph
+        self.factory = factory
         self.euclideanDistance = np.zeros(0).reshape(0,0)
-        self.setTransition(self.transition)
+        self.cproblem = self.wd(ps.client.basic.problem.getProblem())
+        self.cgraph = self.wd(self.cproblem.getConstraintGraph())
+        self.cedge = dict()
+        self.pathValidation = dict()
 
-    # Set transition
-    #  \param transition name of the transition
-    # Recover transition path validation object to validate configurations
-    def setTransition(self, transition):
+    # Store edge and path validation instances in a dictionary of key edge names
+    def getPathValidation(self):
+        if not self.transition in self.pathValidation:
+            self.cedge[self.transition] = self.wd(self.cgraph.get(
+                self.graph.edges[self.transition]))
+            self.pathValidation[self.transition] = self.wd(
+                self.cedge[self.transition].getPathValidation())
+        return self.pathValidation[self.transition]
+
+
+    def addStateToConstraintGraph(self):
+        if 'look-at-cb' in self.graph.nodes.keys():
+            return
+        if self.robot_name is None:
+            raise RuntimeError("You should specify a robot name in member " +
+                "robot_name for setting security margins.")
+        ps = self.ps; graph = self.graph
+        hpp_camera_frame = self.robot_name + "/" + self.camera_frame
+        ps.createPositionConstraint\
+            ('look-at-cb', hpp_camera_frame, self.chessboard_frame,
+             (0, 0, 0), self.chessboard_center,
+             (True, True, False))
+
+        ps.createLockedJoint(f"place_{self.chessboard_name}/complement",
+            self.chessboard_joint, [0, 0, 0, 0, 0, 0, 1])
+        ps.setConstantRightHandSide(f"place_{self.chessboard_name}/complement",
+            False)
+
+        graph.createNode(['look-at-cb'])
+        graph.createEdge('free', 'look-at-cb', 'go-look-at-cb', 1,
+                         'free')
+        graph.createEdge('look-at-cb', 'free', 'stop-looking-at-cb', 1,
+                         'free')
+
+        graph.addConstraints(node='look-at-cb',
+            constraints = Constraints(numConstraints=['look-at-cb']))
+        graph.addConstraints(edge='go-look-at-cb',
+            constraints = Constraints(numConstraints=
+                [f"place_{self.chessboard_name}/complement"]))
+        graph.addConstraints(edge='stop-looking-at-cb',
+            constraints = Constraints(numConstraints=
+                [f"place_{self.chessboard_name}/complement"]))
+
+        self.factory.generate()
+        self.sm = SecurityMargins(ps, self.factory, [self.robot_name,
+            self.chessboard_name])
+        self.sm.setSecurityMarginBetween(self.robot_name, self.robot_name,
+                                    self.security_distance_robot_robot)
+        self.sm.setSecurityMarginBetween(self.robot_name, self.chessboard_name,
+                                    self.security_distance_robot_chessboard)
+
+        # deactivate collision checking between chessboard and environment
+        self.sm.setSecurityMarginBetween(self.chessboard_name, "universe",
+            self.security_distance_chessboard_universe)
+        self.sm.defaultMargin = self.default_security_distance
+        self.sm.apply()
+        graph.initialize()
+        self.transition = 'go-look-at-cb'
+
+    ## Generate calibration configurations
+    #
+    # \param q0 configuration of the robot that specified the pose of the
+    #           chessboard
+    # \param n number of configurations to generate,
+    # \param m, M minimal and maximal distances between the camera and the
+    #             chessboard
+    def generateValidConfigs(self, q0, n, m, M):
+        robot = self.ps.robot
+        graph = self.graph
+        hpp_camera_frame = self.robot_name + "/" + self.camera_frame
+        if not hpp_camera_frame in robot.getAllJointNames():
+            raise RuntimeError("Specify the camera frame with member " +
+                f"camera_frame. Current value {self.camera_frame} prefixed " +
+                f"with {self.robot_name}/ is not in robot.getAllJointNames()")
+        if not self.chessboard_frame in robot.getAllJointNames():
+            raise RuntimeError("Specify the chessboard frame with member " +
+                f"chessboard_frame. Current value {self.chessboard_frame} is " +
+                               "not in robot.getAllJointNames()")
+        result = list()
+        i = 0
+        while i < n:
+            q = self.shootRandomConfigs(q0, 1)[0]
+            robot.setCurrentConfig(q)
+            hpp_camera_frame = self.robot_name + "/" + self.camera_frame
+            wMc = Transform(robot.getLinkPosition(hpp_camera_frame))
+            wMp = Transform(robot.getLinkPosition(self.chessboard_frame))
+            # Position of chessboard center in world frame
+            c = wMp.transform(np.array(self.chessboard_center))
+            # Position of chessboard center in camera frame
+            c1 = wMc.inverse().transform(c)
+            if not (m < c1[2] and c1[2] < M): continue
+            result.append(q)
+            i += 1
+        return result
+
+    # Generate calibration configs and integrate them in a roadmap
+    #
+    #   After building a roadmap with those configurations, if all of
+    #   them are not in the same connected component, add random
+    #   configurations to the roadmap and add edges between those configurations
+    #   and previously existing configurations, until half of the nbConfigs
+    #   configurations lie in the same connected component of the roadmap
+    def generateConfigurationsAndPaths(self, q_init, nbConfigs,
+                                       filename = None):
+        transition = self.transition
+        self.transition = 'go-look-at-cb'
+        ri = RosInterface(self.ps.robot)
+        if filename:
+            self.calibConfigs = self.readConfigsInFile(filename)
+        else:
+            self.calibConfigs = self.generateValidConfigs\
+                (q_init, nbConfigs, .3, .5)
+        finished = False
+        configs = [q_init] + self.calibConfigs
+        # save transition
+        self.transition = "Loop | f"
+        for q in configs:
+            res, msg = self.getPathValidation().validateConfiguration(q)
+            if not res:
+                print (f"{q} is not valid")
+                return
+            res, err = self.graph.getConfigErrorForEdgeLeaf("Loop | f", q_init,
+                                                            q)
+            if not res:
+                print(f"{q} is not reachable from q_init")
+                return
+
+        while not finished:
+            self.buildRoadmap(configs)
+            # find connected component of q_init
+            for i in range(self.ps.numberConnectedComponents()):
+                cc = self.ps.nodesConnectedComponent(i)
+                if not q_init in cc:
+                    continue
+                print(f'number of nodes in q_init connected component: {len(cc)}')
+                # From here on, q_init is in cc
+                finished = True
+                count = 0
+                for q in self.calibConfigs:
+                    if q in cc:
+                        count +=1
+            if 2*count < len(self.calibConfigs): finished = False
+            # if half of the configurations are in the same connected component,
+            # get out of the while loop
+            if finished: break
+            # Otherwise generate another batch of random configurations
+            configs += self.shootRandomConfigs(q_init, 10)
+            self.buildRoadmap(configs, len(configs) - 10)
         self.transition = transition
-        cproblem = self.wd(self.ps.client.basic.problem.getProblem())
-        cgraph = cproblem.getConstraintGraph()
-        cedge = self.wd(cgraph.get(self.graph.edges[transition]))
-        self.pathValidation = self.wd(cedge.getPathValidation())
+        configs = self.orderConfigurations([q_init] + self.calibConfigs)
+        self.visitConfigurations([q_init] + self.calibConfigs)
 
     # Write configurations in a file in CSV format
     def writeConfigsInFile(self, filename, configs):
@@ -115,7 +280,7 @@ class Calibration(object):
             res, q1, err = self.graph.generateTargetConfig\
                (self.transition, q0, q)
             if not res: continue
-            res, msg = self.pathValidation.validateConfiguration(q1)
+            res, msg = self.getPathValidation().validateConfiguration(q1)
             if res:
                 configs.append(q1)
                 i += 1
@@ -214,3 +379,63 @@ class Calibration(object):
                     self.ps.erasePath(pid)
             else:
                 break
+    # Generate a csv file with the following data for each configuration:
+    #  x, y, z, phix, phiy, phiz,
+    #  ur10e/shoulder_pan_joint, ur10e/shoulder_lift_joint, ur10e/elbow_joint,
+    #  ur10e/wrist_1_joint, ur10e/wrist_2_joint, ur10e/wrist_3_joint
+    #  corresponding to the pose of the camera in the world frame (orientation
+    #  in roll, pitch, yaw), and the joints angles of the robot.
+    #
+    #  maxIndex is the maximal index of the input files:
+    #    configuration_{i}, i<=maxIndex,
+    #    pose_cPo_{i}.yaml, i<=maxIndex.
+    def generateDataForFigaroh(self, input_directory, output_file, maxIndex):
+        robot = self.ps.robot
+        # Use reference pose of chessboard. Note that this is the pose of the
+        # frame extracted from pose computation top left part of the chessboard
+        wMo = SE3(translation=np.array([1.28, 0.108, 1.4775]),
+                  rotation = np.array([[0,0,1],[-1,0,0],[0,-1,0]]))
+        # create a pinocchio model from the Robot.urdfString
+        with open('/tmp/robot.urdf', 'w') as f:
+            f.write(robot.urdfString)
+        pinRob = RobotWrapper()
+        pinRob.initFromURDF('/tmp/robot.urdf')
+        # get camera frame id
+        camera_frame_id = pinRob.model.getFrameId(self.camera_frame)
+        with open(output_file, 'w') as f:
+            # write header line in output file
+            header = "x1,y1,z1,phix1,phiy1,phiz1,"
+            for n in pinRob.model.names[1:]:
+                header += n + ","
+            f.write(header[:-1])
+            f.write("\n")
+            count = 1
+            while count <= maxIndex:
+                poseFile = os.path.join(input_directory, f'pose_cPo_{count}.yaml')
+                configFile = os.path.join(input_directory, f'configuration_{count}')
+                try:
+                    f1 = open(poseFile, 'r')
+                    d = yaml.safe_load(f1)
+                    f1.close()
+                    f1 = open(configFile, 'r')
+                    config = f1.readline()
+                    f1.close()
+                    cMo_tuple = list(zip(*d['data']))[0]
+                    trans = np.array(cMo_tuple[:3])
+                    rot = exp3(np.array(cMo_tuple[3:]))
+                    cMo = SE3(translation = trans, rotation = rot)
+                    oMc = cMo.inverse()
+                    wMc = wMo * oMc
+                    line = ""
+                    # write camera pose
+                    for i in range(3):
+                        line += f'{wMc.translation[i]},'
+                    rpy = pinocchio.rpy.matrixToRpy(wMc.rotation)
+                    for i in range(3):
+                        line += f'{rpy[i]},'
+                    # write configuration
+                    line += config
+                    f.write(line)
+                except FileNotFoundError as exc:
+                    print(f'{poseFile} does not exist')
+                count+=1

@@ -160,9 +160,13 @@ class CalibrationControl (object):
             self.wMc = None
             rospy.loginfo ("No camera pose in tf")
         now = rospy.Time.now ()
+        t1 = now
         # Get image.
         while not self.image or not self.rosJointStates:
             rospy.sleep(1e-3)
+            t1 = rospy.Time.now ()
+            if t1 - now > rospy.Duration(self.timeout):
+                raise RuntimeError("Could not acquire data before timeout.")
         t = self.image.header.stamp
         # Check that data is recent enough
         if abs (now - t) < self.maxDelay:

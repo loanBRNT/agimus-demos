@@ -47,6 +47,7 @@ install(FILES
   agimus_demos/calibration/__init__.py
   agimus_demos/calibration/tooltip_calibration.py
   agimus_demos/calibration/hand_eye_calibration.py
+  agimus_demos/calibration/play_path.py
   DESTINATION ${PYTHON_SITELIB}/agimus_demos/calibration
   )
 

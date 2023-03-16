@@ -19,3 +19,6 @@
 [submodule "ur5"]
 	path = ur5
 	url = https://github.com/agimus/agimus-demos-ur5
+[submodule "ur3"]
+	path = ur3
+	url = https://github.com/agimus/agimus-demos-ur3.git

@@ -112,7 +112,8 @@ class CalibrationControl (object):
         self.rosJointStates = None
         self.jointNames = None
         self.pathId = 0
-        rospy.init_node ('calibration_control')
+        if not rospy.core.is_initialized():
+            rospy.init_node ('calibration_control')
         self.tfBuffer = tf2_ros.Buffer(rospy.Duration (1,0))
         self.tf2Listener = tf2_ros.TransformListener(self.tfBuffer)
         self.pubStartPath = rospy.Publisher ("/agimus/start_path", UInt32,

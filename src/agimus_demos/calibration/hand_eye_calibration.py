@@ -80,6 +80,7 @@ class Calibration(object):
     security_distance_robot_robot = 0
     security_distance_robot_chessboard = 0.015
     security_distance_chessboard_universe = float("-inf")
+    security_distance_robot_universe = .01
     default_security_distance = .01
 
     def wd(self, o):
@@ -145,7 +146,8 @@ class Calibration(object):
                                     self.security_distance_robot_robot)
         self.sm.setSecurityMarginBetween(self.robot_name, self.chessboard_name,
                                     self.security_distance_robot_chessboard)
-
+        self.sm.setSecurityMarginBetween(self.robot_name, "universe",
+            self.security_distance_robot_universe)
         # deactivate collision checking between chessboard and environment
         self.sm.setSecurityMarginBetween(self.chessboard_name, "universe",
             self.security_distance_chessboard_universe)

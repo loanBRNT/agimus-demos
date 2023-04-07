@@ -33,4 +33,21 @@
       <statustip>Open a GUI to calibrate by contact with planes.</statustip>
     </qtgui>
   </class>
+  <class name="Camera Calibration Assistant"
+	 type="rqt_agimus.camera_calibration.CameraCalibration"
+	 base_class_type="rqt_gui_py::Plugin">
+    <description>
+      The Camera Calibration Assistant is an RQT plugin that enables you to capture measurements, including images, robot configurations, and end-effector pose, to facilitate camera calibration
+    </description>
+    <qtgui>
+      <group>
+        <label>Agimus</label>
+        <icon type="theme">folder</icon>
+        <statustip>Plugins related to Agimus.</statustip>
+      </group>
+      <label>Camera Calibration Assistant</label>
+      <icon type="theme">applications-python</icon>
+      <statustip>Test</statustip>
+    </qtgui>
+  </class>
 </library>

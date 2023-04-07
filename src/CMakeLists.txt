@@ -72,6 +72,7 @@ ENDIF()
 install(FILES
   rqt_agimus/tooltip_calibration.py
   rqt_agimus/contact_calibration.py
+  rqt_agimus/camera_calibration.py
   DESTINATION ${PYTHON_SITELIB}/rqt_agimus)
 
 SET(LIBRARY_NAME ${PROJECT_NAME})

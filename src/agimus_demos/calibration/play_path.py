@@ -128,6 +128,8 @@ class CalibrationControl (object):
         self.hppClient = HppClient ()
         self.count = 0
         self.measurements = list ()
+        # set a default timeout
+        self.timeout = 1.
 
     def playPath (self, pathId):
         nbPaths = self.hppClient.problem.numberPaths ()

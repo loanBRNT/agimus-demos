@@ -129,7 +129,7 @@ class CalibrationControl (object):
         self.count = 0
         self.measurements = list ()
         # set a default timeout
-        self.timeout = 1.
+        self.timeout = 100.
 
     def playPath (self, pathId):
         nbPaths = self.hppClient.problem.numberPaths ()

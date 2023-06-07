@@ -30,7 +30,6 @@ from hpp_idl.hpp import Error as HppError
 
 class InStatePlanner:
     # Default path planner
-    parameters = {'kPRM*/numberOfNodes': Any(TC_long,2000)}
     pathProjectorType = "Progressive"
     pathProjectorParam = 0.02
 
@@ -38,8 +37,9 @@ class InStatePlanner:
         return o
         return wrap_delete(o, self.ps.client.basic._tools)
 
-    def __init__(self, ps, graph):
+    def __init__(self, ps, graph, parameters = dict()):
         self.orb = ORB_init()
+        self.parameters = parameters
         self.ps = ps
         self.graph = graph
         self.plannerType = "BiRRT*"

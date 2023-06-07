@@ -52,6 +52,7 @@ class InStatePlanner:
         # create a new problem with the robot
         self.cproblem = self.wd(self.ps.hppcorba.problem.createProblem\
                                 (self.crobot))
+        self.cgraph = self.wd(self.manipulationProblem.getConstraintGraph())
         # Set parameters
         for k, v in self.parameters.items():
             self.cproblem.setParameter(k, v)
@@ -75,16 +76,21 @@ class InStatePlanner:
         for obs in self.ps.getObstacleNames(True,False):
             self.cproblem.addObstacle\
                 (self.wd(self.ps.hppcorba.problem.getObstacle(obs)))
+        # Store path validation for each edge
+        self.pathValidations = dict()
+        self.constraints = dict()
+        self.steeringMethods = dict()
+        for e in self.graph.edges.keys():
+            cedge = self.wd(self.cgraph.get(self.graph.edges[e]))
+            self.pathValidations[e] = self.wd(cedge.getPathValidation())
+            self.constraints[e] = self.wd(cedge.pathConstraint())
+            self.steeringMethods[e] = self.wd(cedge.getSteeringMethod())
 
     def setEdge(self, edge):
-        # get reference to constraint graph
-        cgraph = self.wd(self.manipulationProblem.getConstraintGraph())
-        self.cedge = self.wd(cgraph.get(self.graph.edges[edge]))
-        self.cconstraints = self.wd(self.cedge.pathConstraint())
-        self.cproblem.setPathValidation(self.cedge.getPathValidation())
-        self.cproblem.setConstraints(self.cconstraints)
-        self.cproblem.setSteeringMethod\
-            (self.wd(self.cedge.getSteeringMethod()))
+        self._edge = edge
+        self.cproblem.setPathValidation(self.pathValidations[self._edge])
+        self.cproblem.setConstraints(self.constraints[self._edge])
+        self.cproblem.setSteeringMethod(self.steeringMethods[self._edge])
         self.cproblem.filterCollisionPairs()
 
     def setReedsAndSheppSteeringMethod(self):
@@ -96,7 +102,7 @@ class InStatePlanner:
         self.cproblem.setDistance(dist)
 
     def buildRoadmap(self, qinit):
-        self.wd(self.cconstraints.getConfigProjector()).\
+        self.wd(self.constraints[self._edge].getConfigProjector()).\
             setRightHandSideFromConfig(qinit)
         self.cproblem.setInitConfig(qinit)
         self.cproblem.resetGoalConfigs()
@@ -133,12 +139,12 @@ class InStatePlanner:
         if not p: return False, None, "Steering method failed"
         res = p is not None; p1 = p; msg = ""
         if validate:
-            pv = self.wd(self.cedge.getPathValidation())
+            pv = self.pathValidations[self._edge]
             res, p1, msg = pv.validate(p, False)
         return res, p1, msg
 
     def computePath(self, qinit, qgoals, resetRoadmap = False):
-        self.wd(self.cconstraints.getConfigProjector()).\
+        self.wd(self.constraints[self._edge].getConfigProjector()).\
             setRightHandSideFromConfig(qinit)
         self.cproblem.setInitConfig(qinit)
         self.cproblem.resetGoalConfigs()
@@ -148,7 +154,7 @@ class InStatePlanner:
                 raise TypeError\
                     ('Expected a list of configurations as argument qgoals.' +
                      ' One element turns out to be {};'.format(q))
-            res, q2 = self.cconstraints.apply(q)
+            res, q2 = self.constraints[self._edge].apply(q)
             self.cproblem.addGoalConfig(q2)
 
         if resetRoadmap or not hasattr(self, 'roadmap'):

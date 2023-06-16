@@ -54,7 +54,7 @@ ContactSimulation::ContactSimulation(const std::string& _name):
   signalRegistration(wristPoseSIN << wrenchSOUT);
 }
 
-Vector& ContactSimulation::computeWrench(Vector& res, int time)
+Vector& ContactSimulation::computeWrench(Vector& res, sigtime_t time)
 {
   res.resize(6);
   const MatrixHomogeneous& wristPose(wristPoseSIN(time));

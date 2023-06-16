@@ -58,14 +58,14 @@ class AGIMUS_DEMOS_DLLAPI ContactSimulation : public Entity
 
  private:
   // Input signal
-  SignalPtr<MatrixHomogeneous, int> wristPoseSIN;
+  SignalPtr<MatrixHomogeneous, sigtime_t> wristPoseSIN;
   // Output signal
-  SignalTimeDependent<Vector, int> wrenchSOUT;
+  SignalTimeDependent<Vector, sigtime_t> wrenchSOUT;
 
   // compute the wrench with respect to the wrist pose. The function makes the
   // asumption that the horizontal plane is at 0.75 above the ground. This
   // correspond to the rolling table provided by gerard-bauzil package.
-  Vector& computeWrench(Vector& res, int time);
+  Vector& computeWrench(Vector& res, sigtime_t time);
   // Position of the fingers in wrist frame: each colum of the matrix stores
   // the position of one finger.
   Eigen::Matrix<double, 3, 3> fingers_;

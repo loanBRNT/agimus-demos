@@ -26,9 +26,12 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from csv import writer
+import subprocess
 import time, roslib
 import rospy
 import math
+import pinocchio
+import yaml
 import tf2_ros
 import cv2 as cv
 import eigenpy, numpy as np
@@ -80,6 +83,15 @@ cameraInfoString='''<?xml version="1.0"?>
   </camera>
 </root>
 '''
+kinematicParamsString="""\# Pose of ref_camera_link in hand
+camera:
+  x: {0}
+  y: {1}
+  z: {2}
+  roll: {3}
+  pitch: {4}
+  yaw: {5}
+"""
 # Write an image as read from a ROS topic to a file in png format
 def writeImage(image, filename):
     count = 0
@@ -101,9 +113,12 @@ def writeImage(image, filename):
 #    - record tf transformation between world and camera frames
 #    - record image
 class CalibrationControl (object):
+    directory = "measurements"
+    configDir = "config"
     endEffectorFrame = "ref_camera_link"
     origin = "world"
     maxDelay = rospy.Duration (1,0)
+    squareSize = 0.025
     joints = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
               'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
     def __init__ (self) :
@@ -182,7 +197,7 @@ class CalibrationControl (object):
             measurement ["joint_states"] = self.rosJointStates
         self.measurements.append (measurement)
 
-    def save (self, directory):
+    def save(self):
         # write camera.xml from camera_info topic
         px = self.cameraInfo.K[0 * 3 + 0];
         py = self.cameraInfo.K[1 * 3 + 1];
@@ -190,12 +205,12 @@ class CalibrationControl (object):
         v0 = self.cameraInfo.K[1 * 3 + 2];
         width = self.cameraInfo.width
         height= self.cameraInfo.height
-        with open(directory + '/camera.xml', 'w') as f:
+        with open(self.directory + '/camera.xml', 'w') as f:
             f.write(cameraInfoString.format(width=width, height=height,
                                             px=px, py=py, u0=u0, v0=v0))
         # write urdf description of robot
         robotString = rospy.get_param('/robot_description')
-        with open(directory + '/robot.urdf', 'w') as f:
+        with open(self.directory + '/robot.urdf', 'w') as f:
             f.write(robotString)
         count=0
         for measurement in self.measurements:
@@ -203,9 +218,9 @@ class CalibrationControl (object):
                not "wMc" in measurement.keys():
                 continue
             count+=1
-            writeImage(measurement['image'], directory + "/image-{}.png".\
+            writeImage(measurement['image'], self.directory + "/image-{}.png".\
                        format(count))
-            with open(directory + "/pose_fPe_{}.yaml".format(count), 'w') as f:
+            with open(self.directory + "/pose_fPe_{}.yaml".format(count), 'w') as f:
                 tf = measurement['wMc']
                 rot = eigenpy.Quaternion(tf.transform.rotation.w,
                                          tf.transform.rotation.x,
@@ -223,7 +238,7 @@ class CalibrationControl (object):
                 f.write("- [{}]\n".format(utheta[1]))
                 f.write("- [{}]\n".format(utheta[2]))
             if "joint_states" in measurement:
-                with open(directory + f"/configuration_{count}", 'w') as f:
+                with open(self.directory + f"/configuration_{count}", 'w') as f:
                     line = ""
                     q = len(measurement ["joint_states"])* [None]
                     for jn, jv in zip(self.jointNames,
@@ -279,6 +294,87 @@ class CalibrationControl (object):
             self.jointNames = msg.name
         self.subRosJointState.unregister()
         self.subRosJointState = None
+
+    def computeHandEyeCalibration(self):
+        res = subprocess.run(["compute-chessboard-poses",
+                              "--square_size", f"{self.squareSize}",
+                              "--input", f"{self.directory}/image-%d.png",
+                              "--intrinsic", f"{self.directory}/camera.xml",
+                              "--output", f"{self.directory}/pose_cPo_%d.yaml",
+                              "--no_interactive"])
+        if res.returncode != 0:
+            raise RuntimeError("program compute-chessboard-poses failed.")
+        res = subprocess.run(["compute-hand-eye-calibration",
+                              "--data-path", f"{self.directory}",
+                              "--fPe", "pose_fPe_%d.yaml", "--cPo",
+                              "pose_cPo_%d.yaml", "--output", "eMc.yaml"])
+        if res.returncode != 0:
+            raise RuntimeError("program compute-hand-eye-calibration failed.")
+
+    def computeCameraPose(self):
+        # We denote
+        #  - m panda2_hand,
+        #  - c camera_color_optical_frame,
+        #  - e ref_camera_link (end effector).
+        # we wish to compute a new position mMe_new of ref_camera_link in
+        # panda2_hand in such a way that
+        #  - eMc remains the same (we assume the camera is well calibrated),
+        #  - mMc = mMe_new * eMc = mMe * eMc_measured
+        # Thus
+        #  mMe_new = mMe*eMc_measured*eMc.inverse()
+        timeout = 5.
+        tfBuffer = tf2_ros.Buffer()
+        listener = tf2_ros.TransformListener(tfBuffer)
+        # Get pose of end effector frame in mount frame.
+        mMe = None
+        try:
+            mMe_ros = tfBuffer.lookup_transform(self.mountFrame,
+                self.endEffectorFrame, rospy.Time(), rospy.Duration(timeout))
+            mMe_ros = mMe_ros.transform
+            x = mMe_ros.rotation.x
+            y = mMe_ros.rotation.y
+            z = mMe_ros.rotation.z
+            w = mMe_ros.rotation.w
+            n = math.sqrt(x*x+y*y+z*z+w*w)
+            mMe = pinocchio.XYZQUATToSE3(
+                [mMe_ros.translation.x, mMe_ros.translation.y,
+                 mMe_ros.translation.z, x/n, y/n, z/n, w/n])
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException) as e:
+            raise RuntimeError(str(e))
+
+        # Get pose of optical frame in end effector frame.
+        eMc = None
+        try:
+            eMc_ros = tfBuffer.lookup_transform(self.endEffectorFrame,
+                self.cameraFrame, rospy.Time(), rospy.Duration(timeout))
+            eMc_ros = eMc_ros.transform
+            x = eMc_ros.rotation.x
+            y = eMc_ros.rotation.y
+            z = eMc_ros.rotation.z
+            w = eMc_ros.rotation.w
+            n = math.sqrt(x*x+y*y+z*z+w*w)
+            eMc = pinocchio.XYZQUATToSE3(
+                [eMc_ros.translation.x, eMc_ros.translation.y,
+                 eMc_ros.translation.z, x/n, y/n, z/n, w/n])
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException) as e:
+            raise RuntimeError(str(e))
+
+        eMc_measured = None
+        with open("./eMc.yaml", "r") as f:
+            d = yaml.safe_load(f)
+            v = np.array(list(zip(*d['data']))[0])
+            eMc_measured = pinocchio.SE3(translation=v[0:3],
+                rotation = pinocchio.exp3(v[3:6]))
+        return mMe*eMc_measured*eMc.inverse()
+
+    def writeCameraParameters(self, mMe_new):
+        xyz = mMe_new.translation
+        rpy = pinocchio.rpy.matrixToRpy(mMe_new.rotation)
+        with open(self.configDir + "/calibrated-params.yaml", "w") as f:
+            f.write(kinematicParamsString.format(xyz[0], xyz[1], xyz[2],
+                                                 rpy[0], rpy[1], rpy[2]))
 
 def playAllPaths (startIndex):
     i = startIndex

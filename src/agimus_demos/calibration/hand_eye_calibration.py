@@ -247,7 +247,7 @@ class Calibration(object):
             self.buildRoadmap(configs, len(configs) - 10)
         self.transition = transition
         configs = self.orderConfigurations([q_init] + self.calibConfigs)
-        self.visitConfigurations([q_init] + self.calibConfigs)
+        self.visitConfigurations([q_init] + self.calibConfigs + [q_init])
 
     # Write configurations in a file in CSV format
     def writeConfigsInFile(self, filename, configs):

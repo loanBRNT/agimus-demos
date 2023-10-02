@@ -146,7 +146,7 @@ class CalibrationControl (object):
         # set a default timeout
         self.timeout = 100.
 
-    def playPath (self, pathId):
+    def playPath (self, pathId, collect_data = True):
         nbPaths = self.hppClient.problem.numberPaths ()
         if pathId >= nbPaths:
             raise RuntimeError ("pathId ({}) is bigger than number paths {}"
@@ -154,7 +154,7 @@ class CalibrationControl (object):
         self.errorOccured = False
         self.pubStartPath.publish (pathId)
         self.waitForEndOfMotion ()
-        if not self.errorOccured:
+        if not self.errorOccured and collect_data:
             # wait to be sure that the robot is static
             rospy.sleep(1.)
             print("Collect data.")

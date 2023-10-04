@@ -83,7 +83,7 @@ cameraInfoString='''<?xml version="1.0"?>
   </camera>
 </root>
 '''
-kinematicParamsString="""\# Pose of {0} in {1}
+kinematicParamsString="""# Pose of {0} in {1}
 camera:
   x: {2}
   y: {3}

@@ -296,7 +296,7 @@ class CalibrationControl (object):
         self.subRosJointState = None
 
     def computeHandEyeCalibration(self):
-        res = subprocess.run(["compute-chessboard-poses",
+        res = subprocess.run(["visp-compute-chessboard-poses",
                               "--square_size", f"{self.squareSize}",
                               "--input", f"{self.directory}/image-%d.png",
                               "--intrinsic", f"{self.directory}/camera.xml",
@@ -304,7 +304,7 @@ class CalibrationControl (object):
                               "--no_interactive"])
         if res.returncode != 0:
             raise RuntimeError("program compute-chessboard-poses failed.")
-        res = subprocess.run(["compute-hand-eye-calibration",
+        res = subprocess.run(["visp-compute-hand-eye-calibration",
                               "--data-path", f"{self.directory}",
                               "--fPe", "pose_fPe_%d.yaml", "--cPo",
                               "pose_cPo_%d.yaml", "--output", "eMc.yaml"])

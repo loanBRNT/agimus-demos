@@ -83,14 +83,14 @@ cameraInfoString='''<?xml version="1.0"?>
   </camera>
 </root>
 '''
-kinematicParamsString="""\# Pose of ref_camera_link in hand
+kinematicParamsString="""\# Pose of {0} in {1}
 camera:
-  x: {0}
-  y: {1}
-  z: {2}
-  roll: {3}
-  pitch: {4}
-  yaw: {5}
+  x: {2}
+  y: {3}
+  z: {4}
+  roll: {5}
+  pitch: {6}
+  yaw: {7}
 """
 # Write an image as read from a ROS topic to a file in png format
 def writeImage(image, filename):
@@ -373,8 +373,9 @@ class CalibrationControl (object):
         xyz = mMe_new.translation
         rpy = pinocchio.rpy.matrixToRpy(mMe_new.rotation)
         with open(self.configDir + "/calibrated-params.yaml", "w") as f:
-            f.write(kinematicParamsString.format(xyz[0], xyz[1], xyz[2],
-                                                 rpy[0], rpy[1], rpy[2]))
+            f.write(kinematicParamsString.format(
+                cc.endEffectorFrame, cc.moutFrame,
+                xyz[0], xyz[1], xyz[2], rpy[0], rpy[1], rpy[2]))
 
 def playAllPaths (startIndex):
     i = startIndex

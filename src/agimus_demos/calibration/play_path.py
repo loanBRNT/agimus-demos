@@ -364,7 +364,7 @@ class CalibrationControl (object):
             raise RuntimeError(str(e))
 
         eMc_measured = None
-        with open("./eMc.yaml", "r") as f:
+        with open(self.directory + "/eMc.yaml", "r") as f:
             d = yaml.safe_load(f)
             v = np.array(list(zip(*d['data']))[0])
             eMc_measured = pinocchio.SE3(translation=v[0:3],
@@ -376,7 +376,7 @@ class CalibrationControl (object):
         rpy = pinocchio.rpy.matrixToRpy(mMe_new.rotation)
         with open(self.configDir + "/calibrated-params.yaml", "w") as f:
             f.write(kinematicParamsString.format(
-                cc.endEffectorFrame, cc.moutFrame,
+            self.endEffectorFrame, self.mountFrame,
                 xyz[0], xyz[1], xyz[2], rpy[0], rpy[1], rpy[2]))
 
 def playAllPaths (startIndex):

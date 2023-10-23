@@ -127,6 +127,8 @@ class CalibrationControl (object):
         self.rosJointStates = None
         self.jointNames = None
         self.pathId = 0
+        self.mountFrame = None
+        self.cameraFrame = "camera_color_optical_frame"
         if not rospy.core.is_initialized():
             rospy.init_node ('calibration_control')
         self.tfBuffer = tf2_ros.Buffer(rospy.Duration (1,0))

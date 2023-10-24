@@ -121,15 +121,20 @@ class CalibrationControl (object):
     squareSize = 0.025
     joints = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
               'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
-    def __init__ (self, mountFrame, cameraFrame, endEffectorFrame) :
+    def __init__ (self, mountFrame, opticalFrame, cameraFrame) :
+        """
+        mountFrame: name of the link that holds the camera in urdf file,
+        opticalFrame: optical frame of the camera,
+        cameraFrame: frame of the camera that holds the optical frame.
+        """
         self.running = False
         self.sotJointStates = None
         self.rosJointStates = None
         self.jointNames = None
         self.pathId = 0
         self.mountFrame = mountFrame
+        self.opticalFrame = opticalFrame
         self.cameraFrame = cameraFrame
-        self.endEffectorFrame = endEffectorFrame
         if not rospy.core.is_initialized():
             rospy.init_node ('calibration_control')
         self.tfBuffer = tf2_ros.Buffer(rospy.Duration (1,0))
@@ -174,7 +179,7 @@ class CalibrationControl (object):
         # record position of camera
         try:
             self.wMc = self.tfBuffer.lookup_transform\
-                (self.origin, self.endEffectorFrame, rospy.Time(0))
+                (self.origin, self.cameraFrame, rospy.Time(0))
             measurement["wMc"] = self.wMc
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
                 tf2_ros.ExtrapolationException):
@@ -332,7 +337,7 @@ class CalibrationControl (object):
         mMe = None
         try:
             mMe_ros = tfBuffer.lookup_transform(self.mountFrame,
-                self.endEffectorFrame, rospy.Time(), rospy.Duration(timeout))
+                self.cameraFrame, rospy.Time(), rospy.Duration(timeout))
             mMe_ros = mMe_ros.transform
             x = mMe_ros.rotation.x
             y = mMe_ros.rotation.y
@@ -349,8 +354,8 @@ class CalibrationControl (object):
         # Get pose of optical frame in end effector frame.
         eMc = None
         try:
-            eMc_ros = tfBuffer.lookup_transform(self.endEffectorFrame,
-                self.cameraFrame, rospy.Time(), rospy.Duration(timeout))
+            eMc_ros = tfBuffer.lookup_transform(self.cameraFrame,
+                self.opticalFrame, rospy.Time(), rospy.Duration(timeout))
             eMc_ros = eMc_ros.transform
             x = eMc_ros.rotation.x
             y = eMc_ros.rotation.y
@@ -377,7 +382,7 @@ class CalibrationControl (object):
         rpy = pinocchio.rpy.matrixToRpy(mMe_new.rotation)
         with open(self.configDir + "/calibrated-params.yaml", "w") as f:
             f.write(kinematicParamsString.format(
-            self.endEffectorFrame, self.mountFrame,
+            self.cameraFrame, self.mountFrame,
                 xyz[0], xyz[1], xyz[2], rpy[0], rpy[1], rpy[2]))
 
 def playAllPaths (startIndex):

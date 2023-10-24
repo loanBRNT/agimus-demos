@@ -121,14 +121,15 @@ class CalibrationControl (object):
     squareSize = 0.025
     joints = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
               'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
-    def __init__ (self) :
+    def __init__ (self, mountFrame, cameraFrame, endEffectorFrame) :
         self.running = False
         self.sotJointStates = None
         self.rosJointStates = None
         self.jointNames = None
         self.pathId = 0
-        self.mountFrame = None
-        self.cameraFrame = "camera_color_optical_frame"
+        self.mountFrame = mountFrame
+        self.cameraFrame = cameraFrame
+        self.endEffectorFrame = endEffectorFrame
         if not rospy.core.is_initialized():
             rospy.init_node ('calibration_control')
         self.tfBuffer = tf2_ros.Buffer(rospy.Duration (1,0))

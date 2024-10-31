@@ -24,22 +24,16 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import rospy, sys
+import sys
 from math import sqrt, pi
 import hpp_idl
-from pinocchio import XYZQUATToSE3, SE3ToXYZQUAT
 from agimus_demos import InStatePlanner
 from hpp import Transform
 from hpp.corbaserver import wrap_delete
 from hpp.corbaserver import loadServerPlugin
-from agimus_hpp.plugin import Client as AgimusHppClient
 import numpy as np
-import tf2_ros, rospy
 from hpp.gepetto import PathPlayer
-from std_msgs.msg import Empty as EmptyMsg, Bool, Int32, UInt32, String
 import time
-if sys.version_info.major != 2:
-    from scipy.spatial.transform import Rotation as R
 
 def concatenatePaths(paths):
     if len(paths) == 0: return None
@@ -50,17 +44,6 @@ def concatenatePaths(paths):
     return p
 
 rosNodeStarted = False
-
-def initRosNode():
-    if not rosNodeStarted:
-        rospy.init_node("hpp", disable_signals=True)
-
-def isYes(res):
-    YES = ['y', 'yes']
-    for y in YES:
-        if y in res.lower():
-            return True
-    return False
 
 class PathGenerator(object):
     gripper = 'ur10e/gripper'

@@ -14,27 +14,12 @@ include(cmake/python.cmake)
 compute_project_args(PROJECT_ARGS LANGUAGES CXX)
 project(${PROJECT_NAME} ${PROJECT_ARGS})
 
-add_project_dependency (dynamic-graph-python 4 REQUIRED)
-add_project_dependency (dynamic_graph_bridge 3 REQUIRED)
-
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS
-  roslaunch
-)
-
-catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES agimus_demos
-#  CATKIN_DEPENDS roslaunch
-#  DEPENDS system_lib
-)
 find_package(Eigen3)
 
+set(CATKIN_PACKAGE_SHARE_DESTINATION share/${PROJECT_NAME})
 MACRO(INSTALL_DEMO_LAUNCH_FILES ROBOT DEMO)
   set(options)
   set(oneValueArgs)
@@ -82,8 +67,12 @@ IF(USE_UR10)
   ADD_SUBDIRECTORY(ur10)
 ENDIF()
 
-add_subdirectory(src)
+ADD_SUBDIRECTORY(src)
 
+ADD_LIBRARY(${PROJECT_NAME} INTERFACE)
+INSTALL(TARGETS ${PROJECT_NAME} EXPORT ${TARGETS_EXPORT_NAME} DESTINATION lib)
+
+SET(CATKIN_PACKAGE_SHARE_DESTINATION ${CMAKE_INSTALL_PREFIX}/share)
 # Install other files with the same hierarchy as here.
 install(DIRECTORY urdf srdf meshes worlds
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
@@ -94,6 +83,8 @@ install(DIRECTORY urdf srdf meshes worlds
 
 INSTALL(FILES plugin.xml
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+INSTALL(FILES package.xml
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/${PROJECT_NAME})
 
 install(PROGRAMS
   scripts/gazebo_object_to_tf.py

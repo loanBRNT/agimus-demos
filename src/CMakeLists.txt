@@ -25,16 +25,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set(CMAKE_CXX_STANDARD 14) 
-# Install python module
-if(NOT DEFINED PYTHON_SITELIB)
-  execute_process(
-    COMMAND "${PYTHON_EXECUTABLE}" "-c"
-    #"import sys, os; print(os.sep.join(['lib', 'python' + sys.version[:3], 'dist-packages']))"
-    "from distutils import sysconfig; print(sysconfig.get_python_lib(prefix='', plat_specific=False))"
-    OUTPUT_VARIABLE PYTHON_SITELIB
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET)
-endif()
+findpython()
 
 install(FILES
   agimus_demos/__init__.py
@@ -75,33 +66,3 @@ install(FILES
   rqt_agimus/camera_calibration.py
   DESTINATION ${PYTHON_SITELIB}/rqt_agimus)
 
-SET(LIBRARY_NAME ${PROJECT_NAME})
-ADD_LIBRARY(${LIBRARY_NAME}
-  SHARED
-  contact-simulation.cc
-  contact-simulation.hh
-  )
-target_link_libraries (${LIBRARY_NAME} PUBLIC
-    dynamic-graph-python::dynamic-graph-python
-    )
-INSTALL(TARGETS ${LIBRARY_NAME}
-  EXPORT ${TARGETS_EXPORT_NAME}
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-  )
-
-add_library(wrap MODULE python-module-py.cc)
-file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/src/agimus_demos/sot/${SUBMODULENAME})
-set_target_properties(wrap
-  PROPERTIES PREFIX ""
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/src
-  OUTPUT_NAME agimus_demos/sot/wrap)
-target_compile_options(wrap PRIVATE "-Wl,--no-as-needed")
-target_link_libraries(wrap PUBLIC
-  dynamic-graph-python::dynamic-graph-python
-  ${PYTHON_LIBRARY} ${LIBRARY_NAME})
-target_include_directories(wrap PRIVATE ${PYTHON_INCLUDE_PATH})
-install(TARGETS wrap
-  DESTINATION ${PYTHON_SITELIB}/agimus_demos/sot)
-install(
-  FILES ${CMAKE_CURRENT_SOURCE_DIR}/agimus_demos/sot/__init__.py
-  DESTINATION ${PYTHON_SITELIB}/agimus_demos/sot)
